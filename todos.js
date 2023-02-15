@@ -22,7 +22,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(session({
   name: "launch-school-todos-session-id",
   resave: false,
-  saveUnitialized: true,
+  saveUninitialized: true,
   secret: "this is not very secret",
 }));
 app.use(flash());
@@ -36,6 +36,13 @@ app.use((req, res, next) => {
 // Note that `todoListId` must be numeric.
 const loadTodoList = todoListId => {
   return todoLists.find(todoList => todoList.id === todoListId);
+};
+
+const loadTodo = (todoListId, todoId) => {
+  let todoList = loadTodoList(todoListId);
+  if (!todoList) return undefined;
+
+  return todoList.todos.find(todo => todo.id === todoId);
 };
 
 app.get("/", (req, res) => {
@@ -97,6 +104,54 @@ app.get("/lists/:todoListId", (req, res, next) => {
     });
   }
 });
+
+app.post("/lists/:todoListId/todos/:todoId/toggle", (req, res, next) => {
+  let { todoListId, todoId } = { ...req.params };
+  let todo = loadTodo(Number(todoListId), Number(todoId));
+
+  if (!todo) {
+    next(new Error("Not found"));
+  } else {
+    let title = todo.title;
+    if (todo.isDone()) {
+      todo.markUndone();
+      req.flash("success", `"${title}" marked incomplete!`);
+    } else {
+      todo.markDone();
+      req.flash("success", `"${title}" marked complete!`);
+    }
+  }
+
+  res.redirect(`/lists/${todoListId}`);
+});
+
+app.post("/lists/:todoListId/todos/:todoId/destroy", (req, res, next) => {
+  let { todoListId, todoId } = { ...req.params };
+  let todoList = loadTodoList(Number(todoListId));
+  let todo = loadTodo(Number(todoListId), Number(todoId));
+
+  if (!todoList || !todo) {
+    next(new Error("Not Found"));
+  } else {
+    let title = todo.title;
+    todoList.removeAt(todoList.findIndexOf(todo));
+    req.flash("success", `Removed "${title}!"`);
+    res.redirect(`/lists/${todoListId}`);
+  }
+});
+
+app.post("/lists/:todoListId/complete_all", (req, res, next) => {
+  let todoListId = req.params.todoListId;
+  let todoList = loadTodoList(Number(todoListId));
+
+  if (!todoList) {
+    next(new Error("Not Found"));
+  } else {
+    todoList.markAllDone();
+    req.flash("success", "Marked all tasks complete!");
+    res.redirect(`/lists/${todoListId}`);
+  }
+}); 
 
 // Error Handler
 app.use((err, req, res, _next) => {
